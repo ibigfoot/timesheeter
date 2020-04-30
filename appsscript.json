@@ -1,0 +1,49 @@
+{
+  "timeZone": "Australia/Sydney",
+  "dependencies": {
+    "libraries": [{
+      "userSymbol": "OAuth2",
+      "libraryId": "1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF",
+      "version": "38"
+    }]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "oauthScopes": ["https://www.googleapis.com/auth/calendar.addons.execute", "https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/script.locale", "https://www.googleapis.com/auth/script.external_request", "https://www.googleapis.com/auth/userinfo.email"],
+  "runtimeVersion": "V8",
+  "addOns": {
+    "common": {
+      "name": "time",
+      "logoUrl": "https://uploads-ssl.webflow.com/5a6517444af5970001a8e81a/5a820a1c3b539e00014fd7bb_segment_logo.png",
+      "layoutProperties": {
+        "primaryColor": "#12424a",
+        "secondaryColor": "#ccd9de"
+      },
+      "useLocaleFromApp": true,
+      "homepageTrigger": {
+        "runFunction": "onHomepage",
+        "enabled": true
+      },
+      "universalActions": [{
+        "label": "Open Salesforce",
+        "openLink": "https://segment.lightning.force.com/lightning/o/TASKRAY__trTaskTime__c/list?filterName\u003d00B3q00000818EMEAY"
+      },{
+        "label": "Log an Issue",
+        "openLink": "https://github.com/ibigfoot/timesheeter/issues"
+      }, {
+        "label": "Refresh Project List",
+        "runFunction": "refreshProjectList"
+      }, {
+        "label": "Logout of Salesforce",
+        "runFunction": "logout"
+      }]
+    },
+    "calendar": {
+      "homepageTrigger": {
+        "runFunction": "onHomepageOpen"
+      },
+      "eventOpenTrigger": {
+        "runFunction": "onCalendarEventOpen"
+      }
+    }
+  }
+}
