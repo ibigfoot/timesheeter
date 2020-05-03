@@ -25,7 +25,7 @@
       },
       "universalActions": [{
         "label": "Open Salesforce",
-        "openLink": "https://segment.lightning.force.com/lightning/o/TASKRAY__trTaskTime__c/list?filterName\u003d00B3q00000818EMEAY"
+        "openLink": "https://segment.lightning.force.com/lightning/o/TASKRAY__trTaskTime__c/home"
       },{
         "label": "Log an Issue",
         "openLink": "https://github.com/ibigfoot/timesheeter/issues"

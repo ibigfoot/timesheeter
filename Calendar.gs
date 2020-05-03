@@ -46,10 +46,11 @@ function onCalendarEventOpen(e) {
   if (!event) { // a new event is being created.. not for us to worry about
      sections.push(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('A new event needs to be saved before we can log this as time. Focus on your planning at the moment, come back here later :)'))); 
   } 
+  /*
    // we probably don't want to track Private events, so let the user know how to configure if they are trying to log one
   else if(event.getVisibility() == event.getVisibility().PRIVATE) {
     sections.push(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('This event is marked as Private, so lets respect your privacy and not go any further with it. Change the visiblity of this event if you wish to log it as time.'))); 
-  } 
+  } */
    // we have an event we want to log.. 
   else {
     // lets check we have a credential for Salesforce. if so, let's build out the form fields for logging time
