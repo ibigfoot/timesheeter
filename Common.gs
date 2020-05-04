@@ -111,6 +111,45 @@ function haveWeLoggedThisTimeAlready(calendarEventId) {
   }
 }
 
+/**
+* returns the ID for this user
+* will attempt to get from a cache, if not will query Salesforce
+**/
+function getUserId() {
+  var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX");
+  var service = getService();
+  
+  var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
+  var userIdQuery = `select id from user where username = \'${username}\'`;
+  var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(userIdQuery)}`;
+  
+  var userId = CacheService.getUserCache().get("user_id");
+  console.log(userIdQuery);
+  if(userId) {
+    return userId;
+  } else {
+  
+    var response = withRetry(service, function() {
+      return UrlFetchApp.fetch(url, {
+        headers: {
+          Authorization: 'Bearer ' + service.getAccessToken(),
+        }
+      });                  
+    });
+    if(response && response.getResponseCode() == 200) {
+      userId = JSON.parse(response.getContentText())['records'][0]['Id'];
+      CacheService.getUserCache().put("user_id", userId);
+      console.log(`the response ${JSON.stringify(response.getContentText())}`);
+      return userId;
+    }
+  }
+}
+
+/**
+*
+* Fetch all the TaskRay Projects and associated tasks 
+* will look to see if these are cached before fetching from Salesforce
+*/
 function fetchProjectsAndTasks() {
   var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX");
   var service = getService();
@@ -125,9 +164,9 @@ function fetchProjectsAndTasks() {
   
   var cachedData = cache.get("projects-and-tasks");
   // see if we have this in the cache first... unless our data is over 24hrs old.. then refresh.
-  if(cachedData && cachedData.sfData != null && cachedData.timeFetched && (Date.now() - cachedData.timeFetched < (24 * 60 * 60 * 1000))) {
+  if(cachedData != null) {
     console.log('returning cached list of projects');
-    return JSON.parse(projectsAndTasks); 
+    return JSON.parse(cachedData); 
   } 
   // Make the HTTP request using a wrapper function that handles expired sessions.
   var response = withRetry(service, function() {
@@ -142,12 +181,7 @@ function fetchProjectsAndTasks() {
   console.log(JSON.stringify(response));
 
   if(response && response.getResponseCode() == 200) {
-    sfData = response.getContentText();
-    cachedData = {};
-    cachedData.sfData = sfData;
-    cachedData.timeFetched = Date.now() / 1000; // lets put a timestamp that we can check to automatically refresh project list once per day.
-   
-    cache.put('projects-and-tasks', cachedData);
+    cache.put('projects-and-tasks', response.getContentText(), 21600); // longest time we can cache is 6hrs
     return JSON.parse(response.getContentText());
   } else {
     console.log(JSON.stringify(response));
@@ -175,7 +209,7 @@ function upsertTime(data) {
     'TASKRAY__Date__c':  data.eventDate,
     'TASKRAY__Hours__c': data.hours,
     'TASKRAY__Notes__c': data.description,
-    'TASKRAY__Owner__c': CacheService.getUserCache().get('sforce_user_id')
+    'TASKRAY__Owner__c': getUserId()
   };
   console.log(formData);
   
