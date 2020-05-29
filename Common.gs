@@ -257,15 +257,18 @@ function getUserSettings() {
      settings.myTasksOnly = true;
      settings.myProjectsOnly = true;
      settings.colourEventsOnLogged = true;
+     settings.eventColour = CalendarApp.EventColor.GREEN;
      settings.updateEventNamesOnLogged = false;
      saveUserSettings(settings);
    } else {
      settings = JSON.parse(settingsStr);
    }
+  console.log(`User settings ${JSON.stringify(settings)}`);
    return settings;
 }
 
 function saveUserSettings(settingsObj) {
+  console.log(`Saving user settings ${JSON.stringify(settingsObj)}`);
   if (settingsObj)
     PropertiesService.getUserProperties().setProperty('user_settings', JSON.stringify(settingsObj));
 }

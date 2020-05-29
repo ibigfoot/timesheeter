@@ -89,7 +89,7 @@ function onCalendarEventOpen(e) {
 */
 function onHomepageOpen(e) {
   console.log(e);
-
+  
   var section = undefined;
   var fixedFooter = undefined;
   var action = undefined;
@@ -100,7 +100,7 @@ function onHomepageOpen(e) {
   builder.setHeader(header);
   
   var handleOptionsAction = CardService.newAction()
-            .setFunctionName("handleMyTasksToggle");
+            .setFunctionName("handleSettingsChange");
   
   var myTasksToggle = CardService.newKeyValue()
     .setTopLabel('When loading project tasks')
@@ -129,6 +129,14 @@ function onHomepageOpen(e) {
                 .setSelected(settings.colourEventsOnLogged)
                 .setOnChangeAction(handleOptionsAction));
   
+  var colourEventsColourSelector = CardService.newTextInput()
+     .setSuggestions(CardService.newSuggestions().addSuggestions(Object.keys(CalendarApp.EventColor)))
+     .setFieldName("settings_eventColour")
+     .setTitle("Event Colour")
+     .setOnChangeAction(handleOptionsAction)
+     .setValue(getColourKey(settings.eventColour))
+     .setHint('Clear the default value to see all options available');
+  
   var updateEventNameWhenLogged = CardService.newKeyValue()
   .setTopLabel('When creating time entry')
      .setContent("Append 'logged' to event")
@@ -145,7 +153,8 @@ function onHomepageOpen(e) {
                   .addWidget(myProjectsToggle)
                   .addWidget(myTasksToggle)
                   .addWidget(colourEventsToggle)
-                  .addWidget(updateEventNameWhenLogged));
+                  .addWidget(updateEventNameWhenLogged)
+                  .addWidget(colourEventsColourSelector));
     sections.push(CardService.newCardSection().setHeader('Instructions')
                   .addWidget(CardService.newTextParagraph()
                              .setText('Click on the calendar event you wish to log as time in TaskRay.<br /><br />When you are in an event detail page this window will show you options to log time against a selected project in TaskRay.<br /><br />You can edit TaskRay time entries you have already logged by selecting the calendar event again, you will see the buttons change to <bold>UPDATE</bold> to reflect this.')));
@@ -169,11 +178,23 @@ function onHomepageOpen(e) {
   return builder.build();
 }
 
+function getColourKey(colourValue) {
+ 
+  var keys = Object.keys(CalendarApp.EventColor);
+  for(var i=0 ; i<keys.length ; i++) {
+    var key = keys[i];
+    if(CalendarApp.EventColor[key] == colourValue) {
+      return key; 
+    }
+  }
+  return '';
+}
+
 /**
 *  Function handles when settings are toggled. 
 *
 */
-function handleMyTasksToggle(e) {
+function handleSettingsChange(e) {
   var settings = getUserSettings();
   // if either of these are changed we should refresh project list
   var tasksSettings = settings.myTasksOnly;
@@ -202,7 +223,11 @@ function handleMyTasksToggle(e) {
   } else {
     settings.updateEventNamesOnLogged = false; 
   }
-  
+  if (e && e.formInput['settings_eventColour']) {
+    settings.eventColour = CalendarApp.EventColor[e.formInput['settings_eventColour']];  
+  } else {
+    settings.eventColour = CalendarApp.EventColor.GREEN;  
+  }
   // update settings for the user.
   saveUserSettings(settings);
   
@@ -292,7 +317,7 @@ function upsertInformation(e) {
         var event = calendar.getEventById(e.calendar.id);
         
         if(settings.colourEventsOnLogged) {
-          event.setColor(CalendarApp.EventColor.PALE_GREEN); //TODO - set this color choice as a settings object  
+          event.setColor(settings.eventColour); 
         }
         if (settings.updateEventNamesOnLogged) {
           event.setTitle(event.getTitle() + '-logged'); 
