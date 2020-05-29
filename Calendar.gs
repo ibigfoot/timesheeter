@@ -17,8 +17,7 @@ var service = getService();
 
 // if we want to add a login button, well... 
 var unauthorisedFooter = CardService.newFixedFooter().setPrimaryButton(CardService.newTextButton().setText("Login with Salesforce").setAuthorizationAction(CardService.newAuthorizationAction().setAuthorizationUrl(service.getAuthorizationUrl())));
-                                                                                                     
-
+ 
 /**
  * Callback for rendering the card for a specific Calendar event.
  * @param {Object} e The event object.
@@ -94,26 +93,125 @@ function onHomepageOpen(e) {
   var section = undefined;
   var fixedFooter = undefined;
   var action = undefined;
+  var sections = [];
+  var settings = getUserSettings();
+  
+  var builder = CardService.newCardBuilder();
+  builder.setHeader(header);
+  
+  var handleOptionsAction = CardService.newAction()
+            .setFunctionName("handleMyTasksToggle");
+  
+  var myTasksToggle = CardService.newKeyValue()
+    .setTopLabel('When loading project tasks')
+    .setContent("Only show my project tasks")
+    .setSwitch(CardService.newSwitch()
+        .setFieldName("settings_myTasks")
+        .setValue('my_project_tasks')
+        .setSelected(settings.myTasksOnly)
+        .setOnChangeAction(handleOptionsAction));
+  
+  var myProjectsToggle = CardService.newKeyValue()
+     .setTopLabel('When loading TaskRay projects')
+     .setContent("Only show my projects")
+     .setSwitch(CardService.newSwitch()
+                .setFieldName("settings_myProjects")
+                .setValue('my_projects')
+                .setSelected(settings.myProjectsOnly)
+                .setOnChangeAction(handleOptionsAction));
+  
+  var colourEventsToggle = CardService.newKeyValue()
+     .setTopLabel('When creating time entry')
+     .setContent("Change colour of calendar")
+     .setSwitch(CardService.newSwitch()
+                .setFieldName("settings_colourEventsOnLogged")
+                .setValue('set_colour')
+                .setSelected(settings.colourEventsOnLogged)
+                .setOnChangeAction(handleOptionsAction));
+  
+  var updateEventNameWhenLogged = CardService.newKeyValue()
+  .setTopLabel('When creating time entry')
+     .setContent("Append 'logged' to event")
+     .setSwitch(CardService.newSwitch()
+                .setFieldName("settings_updateEventNameOnLogged")
+                .setValue('set_append')
+                .setSelected(settings.updateEventNamesOnLogged)
+                .setOnChangeAction(handleOptionsAction));
   
   // if we have access to Salesforce, get project list and display the logout footer
   if(service.hasAccess()) {   
     fetchProjectsAndTasks();
-    section = CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('Click on the calendar event you wish to log as time in TaskRay.'))
-    fixedFooter = authorisedFooter;
+    sections.push(new CardService.newCardSection().setHeader('User Settings')
+                  .addWidget(myProjectsToggle)
+                  .addWidget(myTasksToggle)
+                  .addWidget(colourEventsToggle)
+                  .addWidget(updateEventNameWhenLogged));
+    sections.push(CardService.newCardSection().setHeader('Instructions')
+                  .addWidget(CardService.newTextParagraph()
+                             .setText('Click on the calendar event you wish to log as time in TaskRay.<br /><br />When you are in an event detail page this window will show you options to log time against a selected project in TaskRay.<br /><br />You can edit TaskRay time entries you have already logged by selecting the calendar event again, you will see the buttons change to <bold>UPDATE</bold> to reflect this.')));
+
+                  
+    builder.setFixedFooter(authorisedFooter);
   } 
   // else display the login footer.
   else {
     section = CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('You must first authorize with your Salesforce credentials'));
-    fixedFooter = unauthorisedFooter;
+    builder.setFixedFooter(unauthorisedFooter);
   }
   
-  // build the card and return for display
-  return CardService.newCardBuilder()
-  .setHeader(header)
-  .addSection(section)
-  .setFixedFooter(fixedFooter)
-  .setName('home')
-  .build();  
+  
+    // add the sections to the builder to create our card.. 
+  for(var i=0 ; i<sections.length ; i++) {
+    builder.addSection(sections[i]); 
+  }
+  builder.setName('home');
+  // and build
+  return builder.build();
+}
+
+/**
+*  Function handles when settings are toggled. 
+*
+*/
+function handleMyTasksToggle(e) {
+  var settings = getUserSettings();
+  // if either of these are changed we should refresh project list
+  var tasksSettings = settings.myTasksOnly;
+  var projectSettings = settings.myProjectsOnly;
+  
+  if (e && e.formInput['settings_myTasks']) {
+    settings.myTasksOnly = true;  
+  } else {
+    settings.myTasksOnly = false;
+  }
+  
+  if (e && e.formInput['settings_myProjects']) {
+    settings.myProjectsOnly = true;  
+  } else {
+    settings.myProjectsOnly = false;
+  }
+  
+  if (e && e.formInput['settings_colourEventsOnLogged']) {
+    settings.colourEventsOnLogged  = true;
+  } else {
+    settings.colourEventsOnLogged = false;
+  }
+  
+  if (e && e.formInput['settings_updateEventNameOnLogged']){
+   settings.updateEventNamesOnLogged = true; 
+  } else {
+    settings.updateEventNamesOnLogged = false; 
+  }
+  
+  // update settings for the user.
+  saveUserSettings(settings);
+  
+  // if either settings related to the project list have changed, refresh the project list from Salesforce
+  if (!(tasksSettings == settings.myTasksOnly) || !(projectSettings == settings.myProjectsOnly)) {
+   refreshProjectList();  
+  }
+  
+  return CardService.newActionResponseBuilder().setNotification(CardService.newNotification().setText('Updated settings')).setStateChanged(true).build();
 }
 
 
@@ -168,6 +266,7 @@ function upsertInformation(e) {
   var notification = 'TODO';
   var project = e && e.formInput['project'];
   var task = e && e.formInput['task'];
+  var settings = getUserSettings();
   
   if(project && task) {
     // calls Salesforce (or cache) and looks for project list
@@ -191,7 +290,15 @@ function upsertInformation(e) {
       if (response != undefined && response.success) {
         var calendar = CalendarApp.getCalendarById(e.calendar.calendarId);
         var event = calendar.getEventById(e.calendar.id);
-        event.setColor(CalendarApp.EventColor.PALE_GREEN); //TODO - set this color choice as a settings object
+        
+        if(settings.colourEventsOnLogged) {
+          event.setColor(CalendarApp.EventColor.PALE_GREEN); //TODO - set this color choice as a settings object  
+        }
+        if (settings.updateEventNamesOnLogged) {
+          event.setTitle(event.getTitle() + '-logged'); 
+        }
+        
+        
         notification = `You have successfully ${response.created ? "created" : "updated"} a time entry in TaskRay`;
       } else {
         notification = `We could not update the TaskRay Time record. \n${response}`; 

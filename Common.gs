@@ -152,11 +152,26 @@ function getUserId() {
 */
 function fetchProjectsAndTasks() {
   var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX");
+  var settings = getUserSettings();
   var service = getService();
+  var userId = getUserId();
+  
   // SOQL for getting project Id's user is a contributor in. We assume email address of google user will be the salesforce username.
   var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
-  var taskRaySOQLQuery = `select id, name, (select id, name from TASKRAY__Tasks__r) from TASKRAY__Project__c where id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__r.username = \'${username }\') and TASKRAY__trTemplate__c = false`; 
-  //var taskRaySOQLQuery = `select id, name, (select id, name from TASKRAY__Tasks__r) from TASKRAY__Project__c limit 5`; 
+  
+  // build the projects part of the query according to the user settings
+  var projectSOQLQuery = `TASKRAY__Project__c where TASKRAY__trTemplate__c = false and TASKRAY__trStatus__c in ('Assigned','In Progress','On Hold')`;
+  if(settings.myProjectsOnly) {
+    projectSOQLQuery +=  ` and id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__r.username = '${username }')`;
+  }
+                                     
+  // build the tasks part of the query according to user settings
+  var tasksSOQLQuery = `select id, name from TASKRAY__Tasks__r where taskray__trCompleted__c = false`;
+  if(settings.myTasksOnly) {
+      tasksSOQLQuery += ` and ownerId = '${userId}'`;
+  }    
+  
+  var taskRaySOQLQuery = `select id, name, (${tasksSOQLQuery}) from ${projectSOQLQuery}`; 
   console.log(taskRaySOQLQuery);
   var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(taskRaySOQLQuery)}`;
   
@@ -235,3 +250,22 @@ function refreshProjectList() {
   fetchProjectsAndTasks();
 }
 
+function getUserSettings() {
+   var settingsStr = PropertiesService.getUserProperties().getProperty('user_settings');
+   var settings = settings = {};
+   if(!settingsStr) { // set defaults before returning if not found.
+     settings.myTasksOnly = true;
+     settings.myProjectsOnly = true;
+     settings.colourEventsOnLogged = true;
+     settings.updateEventNamesOnLogged = false;
+     saveUserSettings(settings);
+   } else {
+     settings = JSON.parse(settingsStr);
+   }
+   return settings;
+}
+
+function saveUserSettings(settingsObj) {
+  if (settingsObj)
+    PropertiesService.getUserProperties().setProperty('user_settings', JSON.stringify(settingsObj));
+}
