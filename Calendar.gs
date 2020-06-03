@@ -62,9 +62,13 @@ function onCalendarEventOpen(e) {
       var logTimeAction =  CardService.newAction().setFunctionName('upsertInformation').setParameters(eventSalesforceInformation);
       var logTimeActionMessage = eventSalesforceInformation.isUpdate == "true" ? 'Update Time' : 'Log Time';
       var eventStartTime = event.getStartTime().getTime();
+      
+      var timeInputWidget = CardService.newTextInput().setFieldName("hours").setTitle("Hours Logged").setValue(eventSalesforceInformation.hours);
+      
       sections.push(CardService.newCardSection().addWidget(CardService.newTextInput().setSuggestions(createProjectSuggestions()).setFieldName("project").setTitle("Project"))
-                   .addWidget(CardService.newTextInput().setFieldName("task").setTitle("Task").setHint('Select your project first and see a list of tasks').setSuggestionsAction(buildTaskSuggestionsAction))
+                  .addWidget(CardService.newTextInput().setFieldName("task").setTitle("Task").setHint('Select your project first and see a list of tasks').setSuggestionsAction(buildTaskSuggestionsAction)) 
                    .addWidget(CardService.newTextInput().setFieldName("description").setTitle("Description").setMultiline(true))
+                    .addWidget(timeInputWidget)
                    .addWidget(CardService.newTextButton().setText(logTimeActionMessage).setOnClickAction(logTimeAction)));
       
       builder.setFixedFooter(authorisedFooter);
@@ -81,6 +85,27 @@ function onCalendarEventOpen(e) {
   }
   // and build
   return builder.build();
+}
+
+function updateTasks(e, taskSelectionItem) {
+   
+  console.log('trying to update tasks');
+  var project = e && e.formInput['project'];
+  console.log(`we have a project to look for ${project}`);
+  var records = fetchProjectsAndTasks().records;
+  console.log(`we should have ${records.length} projects to look through`);
+  var suggestions = [];
+  for (r in records) {
+    if(records[r].Name == project) {
+      var tasks = records[r].TASKRAY__Tasks__r.records;
+      console.log(`we should have ${tasks.length} tasks to look through`);
+      for(var t in tasks) {
+        taskSelectionInput.addItem(tasks[t].Name);  
+      }
+      //suggestions.sort();
+    }
+  }
+  
 }
 
 /**
@@ -291,6 +316,8 @@ function upsertInformation(e) {
   var notification = 'TODO';
   var project = e && e.formInput['project'];
   var task = e && e.formInput['task'];
+  var hours = e && e.formInput['hours'];
+  
   var settings = getUserSettings();
   
   if(project && task) {
@@ -308,10 +335,12 @@ function upsertInformation(e) {
         }
       }
     }
-    if(e.parameters.projectId && e.parameters.taskId) {
+    if(e.parameters.projectId && e.parameters.taskId && hours) {
       console.log(`we need to be logging time against project ${e.parameters.projectId} and task ${e.parameters.taskId}`); 
       e.parameters.description = e && e.formInput['description'];
-      var response = upsertTime(e.parameters)
+      e.parameters.hours = hours;
+      var response = upsertTime(e.parameters);
+      
       if (response != undefined && response.success) {
         var calendar = CalendarApp.getCalendarById(e.calendar.calendarId);
         var event = calendar.getEventById(e.calendar.id);
@@ -322,8 +351,6 @@ function upsertInformation(e) {
         if (settings.updateEventNamesOnLogged) {
           event.setTitle(event.getTitle() + '-logged'); 
         }
-        
-        
         notification = `You have successfully ${response.created ? "created" : "updated"} a time entry in TaskRay`;
       } else {
         notification = `We could not update the TaskRay Time record. \n${response}`; 
