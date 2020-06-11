@@ -9,10 +9,13 @@
   },
   "exceptionLogging": "STACKDRIVER",
   "oauthScopes": ["https://www.googleapis.com/auth/calendar.addons.execute", "https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/script.locale", "https://www.googleapis.com/auth/script.external_request", "https://www.googleapis.com/auth/userinfo.email"],
+  "urlFetchWhitelist":[
+    "https://segment.my.salesforce.com/"
+    ],
   "runtimeVersion": "V8",
   "addOns": {
     "common": {
-      "name": "time",
+      "name": "TimeSheeter",
       "logoUrl": "https://uploads-ssl.webflow.com/5a6517444af5970001a8e81a/5a820a1c3b539e00014fd7bb_segment_logo.png",
       "layoutProperties": {
         "primaryColor": "#12424a",
