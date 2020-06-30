@@ -24,6 +24,7 @@ var unauthorisedFooter = CardService.newFixedFooter().setPrimaryButton(CardServi
  * @return {CardService.Card} The card to show to the user.
  */
 function onCalendarEventOpen(e) {
+  
   console.log(e);
   var calendar = CalendarApp.getCalendarById(e.calendar.calendarId);
   var event = calendar.getEventById(e.calendar.id);
@@ -31,7 +32,6 @@ function onCalendarEventOpen(e) {
   // Google appends the ISO timestamp of the starttime onto the event.getId() value to distinguish between events on different days
   // we want to store this event Id in Salesforce, rather than the recurring event Id so we get consistent behaviour across days.
   var uniqueEventId = e.calendar.id;
-
 
   // array to store the card sections we create dynamically.
   var sections = [];
@@ -45,11 +45,6 @@ function onCalendarEventOpen(e) {
   if (!event) { // a new event is being created.. not for us to worry about
      sections.push(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('A new event needs to be saved before we can log this as time. Focus on your planning at the moment, come back here later :)'))); 
   } 
-  /*
-   // we probably don't want to track Private events, so let the user know how to configure if they are trying to log one
-  else if(event.getVisibility() == event.getVisibility().PRIVATE) {
-    sections.push(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('This event is marked as Private, so lets respect your privacy and not go any further with it. Change the visiblity of this event if you wish to log it as time.'))); 
-  } */
    // we have an event we want to log.. 
   else {
     // lets check we have a credential for Salesforce. if so, let's build out the form fields for logging time
@@ -65,12 +60,14 @@ function onCalendarEventOpen(e) {
       
       var timeInputWidget = CardService.newTextInput().setFieldName("hours").setTitle("Hours Logged").setValue(eventSalesforceInformation.hours);
       
+      var eventDescription = event.getTitle();
+      
       sections.push(CardService.newCardSection().addWidget(CardService.newTextInput().setSuggestions(createProjectSuggestions()).setFieldName("project").setTitle("Project"))
                   .addWidget(CardService.newTextInput().setFieldName("task").setTitle("Task").setHint('Select your project first and see a list of tasks').setSuggestionsAction(buildTaskSuggestionsAction)) 
-                   .addWidget(CardService.newTextInput().setFieldName("description").setTitle("Description").setMultiline(true))
+                   .addWidget(CardService.newTextInput().setFieldName("description").setTitle("Description").setMultiline(true).setValue(eventDescription))
                     .addWidget(timeInputWidget)
-                   .addWidget(CardService.newTextButton().setText(logTimeActionMessage).setOnClickAction(logTimeAction)));
-      
+                   .addWidget(CardService.newTextButton().setText(logTimeActionMessage).setOnClickAction(logTimeAction).setTextButtonStyle(CardService.TextButtonStyle.FILLED).setBackgroundColor('#12424a')));
+                   // .addWidget(CardService.newImageButton().setIconUrl('https://segment.com/site-assets/images/favicon/favicon-16x16.png').setOnClickAction(logTimeAction).setAltText(logTimeActionMessage)));
       builder.setFixedFooter(authorisedFooter);
     } 
     // otherwise, we probably want to set the login button in the footer.
@@ -89,16 +86,13 @@ function onCalendarEventOpen(e) {
 
 function updateTasks(e, taskSelectionItem) {
    
-  console.log('trying to update tasks');
   var project = e && e.formInput['project'];
-  console.log(`we have a project to look for ${project}`);
   var records = fetchProjectsAndTasks().records;
-  console.log(`we should have ${records.length} projects to look through`);
+  
   var suggestions = [];
   for (r in records) {
     if(records[r].Name == project) {
       var tasks = records[r].TASKRAY__Tasks__r.records;
-      console.log(`we should have ${tasks.length} tasks to look through`);
       for(var t in tasks) {
         taskSelectionInput.addItem(tasks[t].Name);  
       }
@@ -136,15 +130,6 @@ function onHomepageOpen(e) {
         .setSelected(settings.myTasksOnly)
         .setOnChangeAction(handleOptionsAction));
   
-  var myProjectsToggle = CardService.newKeyValue()
-     .setTopLabel('When loading TaskRay projects')
-     .setContent("Only show my projects")
-     .setSwitch(CardService.newSwitch()
-                .setFieldName("settings_myProjects")
-                .setValue('my_projects')
-                .setSelected(settings.myProjectsOnly)
-                .setOnChangeAction(handleOptionsAction));
-  
   var colourEventsToggle = CardService.newKeyValue()
      .setTopLabel('When creating time entry')
      .setContent("Change colour of calendar")
@@ -175,7 +160,6 @@ function onHomepageOpen(e) {
   if(service.hasAccess()) {   
     fetchProjectsAndTasks();
     sections.push(new CardService.newCardSection().setHeader('User Settings')
-                  .addWidget(myProjectsToggle)
                   .addWidget(myTasksToggle)
                   .addWidget(colourEventsToggle)
                   .addWidget(updateEventNameWhenLogged)
@@ -312,7 +296,6 @@ function round_to_precision(x, precision) {
 */
 function upsertInformation(e) {
 
-  console.log(e);
   var notification = 'TODO';
   var project = e && e.formInput['project'];
   var task = e && e.formInput['task'];
@@ -336,9 +319,10 @@ function upsertInformation(e) {
       }
     }
     if(e.parameters.projectId && e.parameters.taskId && hours) {
-      console.log(`we need to be logging time against project ${e.parameters.projectId} and task ${e.parameters.taskId}`); 
+
       e.parameters.description = e && e.formInput['description'];
       e.parameters.hours = hours;
+      
       var response = upsertTime(e.parameters);
       
       if (response != undefined && response.success) {
@@ -385,18 +369,18 @@ function createProjectSuggestions() {
 function createTaskSuggestions(e) {
 
   var project = e && e.formInput['project'];
-  console.log(`we have a project to look for ${project}`);
   var records = fetchProjectsAndTasks().records;
-  console.log(`we should have ${records.length} projects to look through`);
   var suggestions = [];
+  
   for (r in records) {
     if(records[r].Name == project) {
-      var tasks = records[r].TASKRAY__Tasks__r.records;
-      console.log(`we should have ${tasks.length} tasks to look through`);
-      for(var t in tasks) {
-        suggestions.push(tasks[t].Name);  
+      if(records[r] && records[r].TASKRAY__Tasks__r.records) {
+        var tasks = records[r].TASKRAY__Tasks__r.records;
+        for(var t in tasks) {
+          suggestions.push(tasks[t].Name);  
+        }
+        suggestions.sort();
       }
-      suggestions.sort();
     }
   }
   return CardService.newSuggestionsResponseBuilder().setSuggestions(CardService.newSuggestions().addSuggestions(suggestions)).build();  

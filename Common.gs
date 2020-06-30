@@ -46,11 +46,10 @@ function authCallback(request) {
   var service = getService();
   var authorized = service.handleCallback(request);
   if (authorized) {
-    console.log(JSON.stringify(service));
-    console.log(JSON.stringify(authorized));
     var id_url = service.storage_.memory_['oauth2.Saleforce'].id; // this is not a typo here, but a typo in the OAuth lib
     var user_id = id_url.substring(id_url.lastIndexOf('/')+1, id_url.length);
     CacheService.getUserCache().put('sforce_user_id', user_id);
+    
     return HtmlService.createHtmlOutput('Success!');
   } else {
     return HtmlService.createHtmlOutput('Denied.');
@@ -124,7 +123,8 @@ function getUserId() {
   var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(userIdQuery)}`;
   
   var userId = CacheService.getUserCache().get("user_id");
-  console.log(userIdQuery);
+  //console.log(userIdQuery);
+  
   if(userId) {
     return userId;
   } else {
@@ -139,7 +139,7 @@ function getUserId() {
     if(response && response.getResponseCode() == 200) {
       userId = JSON.parse(response.getContentText())['records'][0]['Id'];
       CacheService.getUserCache().put("user_id", userId);
-      console.log(`the response ${JSON.stringify(response.getContentText())}`);
+
       return userId;
     }
   }
@@ -160,10 +160,7 @@ function fetchProjectsAndTasks() {
   var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
   
   // build the projects part of the query according to the user settings
-  var projectSOQLQuery = `TASKRAY__Project__c where TASKRAY__trTemplate__c = false and TASKRAY__trStatus__c in ('Assigned','In Progress','On Hold')`;
-  if(settings.myProjectsOnly) {
-    projectSOQLQuery +=  ` and id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__r.username = '${username }')`;
-  }
+  var projectSOQLQuery = `TASKRAY__Project__c where TASKRAY__trTemplate__c = false and TASKRAY__trStatus__c in ('Assigned','In Progress','On Hold') and id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__r.username = '${username }')`;
                                      
   // build the tasks part of the query according to user settings
   var tasksSOQLQuery = `select id, name from TASKRAY__Tasks__r where taskray__trCompleted__c = false`;
@@ -172,12 +169,13 @@ function fetchProjectsAndTasks() {
   }    
   
   var taskRaySOQLQuery = `select id, name, (${tasksSOQLQuery}) from ${projectSOQLQuery}`; 
-  console.log(taskRaySOQLQuery);
+  //console.log(taskRaySOQLQuery);
+  
   var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(taskRaySOQLQuery)}`;
   
   var cache = CacheService.getUserCache();
-  
   var cachedData = cache.get("projects-and-tasks");
+  
   // see if we have this in the cache first... unless our data is over 24hrs old.. then refresh.
   if(cachedData != null) {
     console.log('returning cached list of projects');
@@ -193,10 +191,11 @@ function fetchProjectsAndTasks() {
     });
   });
 
-  console.log(JSON.stringify(response));
-
   if(response && response.getResponseCode() == 200) {
+    
+    var cacheData = response.getContentText();
     cache.put('projects-and-tasks', response.getContentText(), 21600); // longest time we can cache is 6hrs
+    
     return JSON.parse(response.getContentText());
   } else {
     console.log(JSON.stringify(response));
@@ -255,7 +254,6 @@ function getUserSettings() {
    var settings = settings = {};
    if(!settingsStr) { // set defaults before returning if not found.
      settings.myTasksOnly = true;
-     settings.myProjectsOnly = true;
      settings.colourEventsOnLogged = true;
      settings.eventColour = CalendarApp.EventColor.GREEN;
      settings.updateEventNamesOnLogged = false;
@@ -263,12 +261,11 @@ function getUserSettings() {
    } else {
      settings = JSON.parse(settingsStr);
    }
-  console.log(`User settings ${JSON.stringify(settings)}`);
+
    return settings;
 }
 
 function saveUserSettings(settingsObj) {
-  console.log(`Saving user settings ${JSON.stringify(settingsObj)}`);
   if (settingsObj)
     PropertiesService.getUserProperties().setProperty('user_settings', JSON.stringify(settingsObj));
 }
