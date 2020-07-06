@@ -15,7 +15,6 @@ function getService() {
     clientId = 'do something';
     clientSecret = 'do something';
   }
-  
   return OAuth2.createService('Saleforce')
       // Set the endpoint URLs.
       .setAuthorizationBaseUrl(authUrl)
