@@ -16,7 +16,7 @@ var authorisedFooter = CardService.newFixedFooter().setPrimaryButton(CardService
 var service = getService();
 
 // if we want to add a login button, well... 
-var unauthorisedFooter = CardService.newFixedFooter().setPrimaryButton(CardService.newTextButton().setText("Login with Salesforce").setAuthorizationAction(CardService.newAuthorizationAction().setAuthorizationUrl(service.getAuthorizationUrl())));
+var unauthorisedFooter = CardService.newFixedFooter().setPrimaryButton(CardService.newTextButton().setText("Login to Salesforce").setAuthorizationAction(CardService.newAuthorizationAction().setAuthorizationUrl(service.getAuthorizationUrl())));
  
 /**
  * Callback for rendering the card for a specific Calendar event.
@@ -108,7 +108,6 @@ function updateTasks(e, taskSelectionItem) {
 */
 function onHomepageOpen(e) {
   console.log(e);
-  
   var section = undefined;
   var fixedFooter = undefined;
   var action = undefined;
@@ -117,6 +116,9 @@ function onHomepageOpen(e) {
   
   var builder = CardService.newCardBuilder();
   builder.setHeader(header);
+  
+  var versionText = CardService.newTextParagraph()
+            .setText(`You are currently using the ${getUserSettings().version} version of Timesheeter. If this is not you (i.e you need to use Employee instead of Community) you can change your configuration in the drop down menu at the top of this addon`);
   
   var handleOptionsAction = CardService.newAction()
             .setFunctionName("handleSettingsChange");
@@ -160,6 +162,7 @@ function onHomepageOpen(e) {
   if(service.hasAccess()) {   
     fetchProjectsAndTasks();
     sections.push(new CardService.newCardSection().setHeader('User Settings')
+                  .addWidget(versionText)
                   .addWidget(myTasksToggle)
                   .addWidget(colourEventsToggle)
                   .addWidget(updateEventNameWhenLogged)

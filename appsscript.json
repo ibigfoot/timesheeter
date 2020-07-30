@@ -36,8 +36,17 @@
         "label": "Refresh Project List",
         "runFunction": "refreshProjectList"
       }, {
+        "label": "Clear User Settings",
+        "runFunction" : "clearUserSettings"
+      },{
         "label": "Logout of Salesforce",
         "runFunction": "logout"
+      },{
+        "label": "Set Community Login",
+        "runFunction": "setAsCommunity"
+      },{
+        "label": "Set Employee Login",
+        "runFunction": "setAsEmployee"
       }]
     },
     "calendar": {

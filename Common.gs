@@ -3,18 +3,13 @@
  */
 function getService() {
 
+  var settings = getUserSettings();
   var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX");
   var clientId = PropertiesService.getScriptProperties().getProperty("CLIENT_ID");
   var clientSecret = PropertiesService.getScriptProperties().getProperty("CLIENT_SECRET");
-  var authUrl = PropertiesService.getScriptProperties().getProperty("LOGIN_URL");
-  var tokenUrl = PropertiesService.getScriptProperties().getProperty("TOKEN_URL");
+  var authUrl = settings.authUrl;
+  var tokenUrl = settings.tokenUrl;
   
-  if(sandbox) {
-    authUrl = "https://test.salesforce.com/services/oauth2/authorize";
-    tokenUrl = "https://test.salesforce.com/services/oauth2/token";
-    clientId = 'do something';
-    clientSecret = 'do something';
-  }
   return OAuth2.createService('Saleforce')
       // Set the endpoint URLs.
       .setAuthorizationBaseUrl(authUrl)
@@ -49,7 +44,7 @@ function authCallback(request) {
     var user_id = id_url.substring(id_url.lastIndexOf('/')+1, id_url.length);
     CacheService.getUserCache().put('sforce_user_id', user_id);
     
-    return HtmlService.createHtmlOutput('Success!');
+    return HtmlService.createHtmlOutput('<h1>Success!</h1><p>Please close this browser window</p>');
   } else {
     return HtmlService.createHtmlOutput('Denied.');
   }
@@ -76,6 +71,7 @@ function withRetry(service, func) {
     service.refresh();
     return func();
   }
+  console.log(`response : ${JSON.stringify(response)}`);
   return response;
 }
 
@@ -87,9 +83,12 @@ function reset() {
 }
 
 function haveWeLoggedThisTimeAlready(calendarEventId) {
+  
   var service = getService();
   var taskRayTimeSOQLQuery = `select id from TASKRAY__trTaskTime__c where gcal_event_id__c = \'${calendarEventId}\'`;
   var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(taskRayTimeSOQLQuery)}`;
+  
+  console.log(url);
   
   var response = withRetry(service, function() {
     console.log(`return list of existing TASKRAY time entries for calendar entry ${calendarEventId}`);
@@ -99,6 +98,8 @@ function haveWeLoggedThisTimeAlready(calendarEventId) {
       }
     });
   });
+
+
   if(response.getResponseCode() == 200) {
     // we don't want to cache this, we want to check everytime
     return JSON.parse(response.getContentText());
@@ -116,13 +117,17 @@ function haveWeLoggedThisTimeAlready(calendarEventId) {
 function getUserId() {
   var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX");
   var service = getService();
+  var settings = getUserSettings();
   
   var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
+  if(PropertiesService.getScriptProperties().getProperty("COMMUNITY_SB_USER")) {
+     username = PropertiesService.getScriptProperties().getProperty("COMMUNITY_SB_USER");
+  }
   var userIdQuery = `select id from user where username = \'${username}\'`;
   var url = `${service.getToken().instance_url}/services/data/v47.0/query?q=${encodeURI(userIdQuery)}`;
   
   var userId = CacheService.getUserCache().get("user_id");
-  //console.log(userIdQuery);
+  console.log(url);
   
   if(userId) {
     return userId;
@@ -156,10 +161,11 @@ function fetchProjectsAndTasks() {
   var userId = getUserId();
   
   // SOQL for getting project Id's user is a contributor in. We assume email address of google user will be the salesforce username.
-  var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
+  //var username = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
+  var username = settings.salesforceUsername;
   
   // build the projects part of the query according to the user settings
-  var projectSOQLQuery = `TASKRAY__Project__c where TASKRAY__trTemplate__c = false and TASKRAY__trStatus__c in ('Assigned','In Progress','On Hold') and id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__r.username = '${username }')`;
+  var projectSOQLQuery = `TASKRAY__Project__c where TASKRAY__trTemplate__c = false and TASKRAY__trStatus__c in ('Assigned','In Progress','On Hold') and id in (SELECT TASKRAY__Project__c FROM TASKRAY__trContributor__c where TASKRAY__User__c = '${userId}')`;
                                      
   // build the tasks part of the query according to user settings
   var tasksSOQLQuery = `select id, name from TASKRAY__Tasks__r where taskray__trCompleted__c = false`;
@@ -174,7 +180,7 @@ function fetchProjectsAndTasks() {
   
   var cache = CacheService.getUserCache();
   var cachedData = cache.get("projects-and-tasks");
-  
+  console.log(url);
   // see if we have this in the cache first... unless our data is over 24hrs old.. then refresh.
   if(cachedData != null) {
     console.log('returning cached list of projects');
@@ -248,6 +254,26 @@ function refreshProjectList() {
   fetchProjectsAndTasks();
 }
 
+function clearUserSettings() {
+  PropertiesService.getUserProperties().deleteProperty('user_settings');
+}
+
+function setAsCommunity(e) {
+   logout();
+   settings = getUserSettings();
+   settings.version = 'Community'
+   saveUserSettings(settings);
+  return onHomepageOpen(e);
+}
+
+function setAsEmployee(e) {
+   logout();
+   settings = getUserSettings();
+   settings.version = 'Employee'
+   saveUserSettings(settings);
+  return onHomepageOpen(e);
+}
+
 function getUserSettings() {
    var settingsStr = PropertiesService.getUserProperties().getProperty('user_settings');
    var settings = settings = {};
@@ -256,6 +282,8 @@ function getUserSettings() {
      settings.colourEventsOnLogged = true;
      settings.eventColour = CalendarApp.EventColor.GREEN;
      settings.updateEventNamesOnLogged = false;
+     settings.salesforceUsername = sandbox ? Session.getActiveUser().getEmail() + "." + sandbox : Session.getActiveUser().getEmail();
+     settings.version = 'Employee'
      saveUserSettings(settings);
    } else {
      settings = JSON.parse(settingsStr);
@@ -265,6 +293,31 @@ function getUserSettings() {
 }
 
 function saveUserSettings(settingsObj) {
-  if (settingsObj)
-    PropertiesService.getUserProperties().setProperty('user_settings', JSON.stringify(settingsObj));
+  settingsObj = setURLS(settingsObj); // before saving work out if we are in the community version or not, or if we are on sandbox.
+  PropertiesService.getUserProperties().setProperty('user_settings', JSON.stringify(settingsObj));
+  console.log(JSON.stringify(settingsObj));
+}
+
+function setURLS(settings) {
+   var tokenContext = '/services/oauth2/token';
+   var loginContext = '/services/oauth2/authorize';
+   var sandbox = PropertiesService.getScriptProperties().getProperty("SANDBOX")
+  if(settings.version == 'Community') {
+    if(sandbox) {
+      settings.authUrl = PropertiesService.getScriptProperties().getProperty("COMMUNITY_SANDBOX_URL") + loginContext;
+      settings.tokenUrl = PropertiesService.getScriptProperties().getProperty("COMMUNITY_SANDBOX_URL") + tokenContext;
+    } else {
+      settings.authUrl = PropertiesService.getScriptProperties().getProperty("COMMUNITY_LOGIN_URL") + loginContext;
+      settings.tokenUrl = PropertiesService.getScriptProperties().getProperty("COMMUNITY_LOGIN_URL") + tokenContext;
+    }
+  } else {
+    if(sandbox) {
+      settings.authUrl = "https://test.salesforce.com" + loginContext;
+      settings.tokenUrl = "https://test.salesforce.com" + tokenContext; 
+    } else {
+      settings.authUrl = PropertiesService.getScriptProperties().getProperty("LOGIN_URL") + loginContext;
+      settings.tokenUrl = PropertiesService.getScriptProperties().getProperty("LOGIN_URL") + tokenContext;  
+    }
+  }
+   return settings
 }
